@@ -1,0 +1,300 @@
+---
+title: "MA#4"
+author: "Bryan Collins"
+date: "7/25/2021"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+options(scipen = 999)
+knitr::opts_chunk$set(echo = TRUE)
+library(moments)  # install.packages("moments")
+library(ggplot2)
+library(tidyverse)
+library(gridExtra)
+library(readxl)
+library(scales)
+library(caret)
+library(car)
+library(PRROC)
+
+setwd("~/MSDS 410")
+
+wine_train <- read.csv("~/MSDS 410/wine_train.csv")
+wine_test <- read.csv("~/MSDS 410/wine_test.csv")
+
+```
+
+Section 1 Data exploration
+
+Let's take a look at some visuals to get an idea on the data set
+
+```{r,echo=FALSE,comment=NA}
+
+summary(wine_train)
+
+
+ggplot(wine_train,aes(x=TARGET))+geom_histogram(color="blue",fill="white",binwidth =1)
+
+ggplot(wine_train,aes(FixedAcidity))+geom_boxplot(color="Red")+coord_flip()
+ggplot(wine_train,aes(VolatileAcidity))+geom_boxplot(color="Red")+coord_flip()
+ggplot(wine_train,aes(CitricAcid))+geom_boxplot(color="Red")+coord_flip()
+ggplot(wine_train,aes(ResidualSugar))+geom_boxplot(color="Red")+coord_flip()
+ggplot(wine_train,aes(Chlorides))+geom_boxplot(color="Red")+coord_flip()
+ggplot(wine_train,aes(FreeSulfurDioxide))+geom_boxplot(color="Red")+coord_flip()
+ggplot(wine_train,aes(TotalSulfurDioxide))+geom_boxplot(color="Red")+coord_flip()
+ggplot(wine_train,aes(Density))+geom_boxplot(color="Red")+coord_flip()
+ggplot(wine_train,aes(pH))+geom_boxplot(color="Red")+coord_flip()
+ggplot(wine_train,aes(Sulphates))+geom_boxplot(color="Red")+coord_flip()
+ggplot(wine_train,aes(Alcohol))+geom_boxplot(color="Red")+coord_flip()
+ggplot(wine_train,aes(LabelAppeal))+geom_boxplot(color="Red")+coord_flip()
+ggplot(wine_train,aes(AcidIndex))+geom_boxplot(color="Red")+coord_flip()
+ggplot(wine_train,aes(STARS))+geom_boxplot(color="Red")+coord_flip()
+
+ggplot(wine_train,aes(x=FixedAcidity))+geom_histogram(color="green",fill="white",binwidth =1)
+ggplot(wine_train,aes(x=VolatileAcidity))+geom_histogram(color="green",fill="white",binwidth =1)
+ggplot(wine_train,aes(x=CitricAcid))+geom_histogram(color="green",fill="white",binwidth =1)
+ggplot(wine_train,aes(x=ResidualSugar))+geom_histogram(color="green",fill="white",binwidth =10)
+ggplot(wine_train,aes(x=Chlorides))+geom_histogram(color="green",fill="white",binwidth =10)
+ggplot(wine_train,aes(x=FreeSulfurDioxide))+geom_histogram(color="green",fill="white",binwidth =10)
+ggplot(wine_train,aes(x=TotalSulfurDioxide))+geom_histogram(color="green",fill="white",binwidth =1)
+ggplot(wine_train,aes(x=Density))+geom_histogram(color="green",fill="white",binwidth =1)
+ggplot(wine_train,aes(x=pH))+geom_histogram(color="green",fill="white",binwidth =1)
+ggplot(wine_train,aes(x=Sulphates))+geom_histogram(color="green",fill="white",binwidth =1)
+ggplot(wine_train,aes(x=Alcohol))+geom_histogram(color="green",fill="white",binwidth =1)
+ggplot(wine_train,aes(x=LabelAppeal))+geom_histogram(color="green",fill="white",binwidth =1)
+ggplot(wine_train,aes(x=AcidIndex))+geom_histogram(color="green",fill="white",binwidth =1)
+ggplot(wine_train,aes(x=STARS))+geom_histogram(color="green",fill="white",binwidth =1)
+
+
+
+       
+```
+
+
+Looks like there are a few columns with NAs.
+
+Residual Sugar
+Cholrides
+FreeSulfurDixode
+TotalSulfurDioxide
+pH
+Sulphates
+Alcohol
+Stars
+
+Lets replace those NAs with the median value.
+```{r,echo=FALSE,comment=NA}
+wine_train$ResidualSugar[is.na(wine_train$ResidualSugar)]<-median(wine_train$ResidualSugar,na.rm=TRUE)
+wine_train$FreeSulfurDioxide[is.na(wine_train$FreeSulfurDioxide)]<-median(wine_train$FreeSulfurDioxide,na.rm=TRUE)
+wine_train$TotalSulfurDioxide[is.na(wine_train$TotalSulfurDioxide)]<-median(wine_train$TotalSulfurDioxide,na.rm=TRUE)
+wine_train$pH[is.na(wine_train$pH)]<-median(wine_train$pH,na.rm=TRUE)
+wine_train$Sulphates[is.na(wine_train$Sulphates)]<-median(wine_train$Sulphates,na.rm=TRUE)
+wine_train$Alcohol[is.na(wine_train$Alcohol)]<-median(wine_train$Alcohol,na.rm=TRUE)
+wine_train$STARS[is.na(wine_train$STARS)]<-median(wine_train$STARS,na.rm=TRUE)
+wine_train$Chlorides[is.na(wine_train$Chlorides)]<-median(wine_train$Chlorides,na.rm=TRUE)
+
+summary(wine_train)
+
+```
+
+From the boxplots andd historgrams it looks like some of our variables have a high kurtosis let's run the kurtosis numbers to confirm
+
+```{r,comment=NA}
+kurtosis(wine_train$FixedAcidity)
+kurtosis(wine_train$VolatileAcidity)
+kurtosis(wine_train$CitricAcid)
+kurtosis(wine_train$ResidualSugar)
+kurtosis(wine_train$Chlorides)
+kurtosis(wine_train$FreeSulfurDioxide)
+kurtosis(wine_train$TotalSulfurDioxide)
+kurtosis(wine_train$Density)
+kurtosis(wine_train$pH)
+kurtosis(wine_train$Sulphates)
+kurtosis(wine_train$Alcohol)
+kurtosis(wine_train$LabelAppeal)
+kurtosis(wine_train$AcidIndex)
+kurtosis(wine_train$STARS)
+
+
+```
+
+
+Section 2 Data Preparation
+
+Let's create a new variable that is the ratio of fixed vs volatile acidity and total sulfur vs free sulfur.
+
+```{r,echo=FALSE,comment=NA}
+wine_train <- wine_train %>% mutate(acid_ratio = ifelse(wine_train$VolatileAcidity==0,0,wine_train$FixedAcidity/wine_train$VolatileAcidity))
+
+wine_train <- wine_train %>% mutate(sulfur_ratio = ifelse(is.na(wine_train$TotalSulfurDioxide),0,ifelse(is.na(wine_train$FreeSulfurDioxide),0,wine_train$TotalSulfurDioxide/wine_train$FreeSulfurDioxide)))
+
+wine_train$sulfur_ratio[is.infinite(wine_train$sulfur_ratio)]<-0
+
+
+```
+
+
+Let's also create a binary sale or no sale of our target variable. If target varialbe is 1> then it is a sales or if 0 then no sale denoted by binary variable 0= no sale 1= sale.
+
+```{r,echo=FALSE,comment=NA}
+
+wine_train<-wine_train %>% mutate(TARGET_1= ifelse(wine_train$TARGET>0,1,0))
+ggplot(data=wine_train,aes(TARGET_1))+geom_bar(width=.5)
+
+```
+
+Residual Sugar has a high kurtosis so let's create a few buckets:
+
+1= less than -100
+2= between -100 and -50
+3= between -50 and 0
+4= between 0 and 50
+5= between 50 and 100
+6= greater than 100
+
+```{r,echo=FALSE,comment=NA}
+
+b<- c(-Inf,-100,-50,0,50,100,Inf)
+names<-c("1","2","3","4","5","6")
+wine_train$ResidualSugar.buckets<-cut(wine_train$ResidualSugar,breaks = b,labels = names)     
+
+histogram(wine_train$ResidualSugar.buckets)
+
+
+```
+
+
+Let's create a few combination variables. 
+
+Stars * Acidindex
+
+Alcohol + Sulphates
+
+Label Appeal + Stars
+
+
+
+```{r,echo=FALSE,comment=NA}
+
+wine_train<-wine_train %>% mutate(Stars_Acidindex= wine_train$STARS*wine_train$AcidIndex)
+
+wine_train<-wine_train %>% mutate(Alcohol_Suphates= wine_train$Alcohol+wine_train$Sulphates)
+
+wine_train<-wine_train %>% mutate(Labelappeal_Starts= wine_train$LabelAppeal+wine_train$STARS)
+
+```
+
+Section 3 Build Models
+
+Lets create 3 different models. One regression and two logistic regression models.
+
+Let's start with the regression model.
+
+```{r,echo=FALSE,comment=NA}
+mean_target<-mean(wine_train$TARGET_1)
+
+lm_model<-lm(TARGET_1~acid_ratio+sulfur_ratio+CitricAcid+pH+ResidualSugar.buckets+Stars_Acidindex+Alcohol_Suphates+Labelappeal_Starts,data=wine_train)
+
+summary(lm_model)
+
+
+glm_model<-glm(TARGET_1~acid_ratio+sulfur_ratio+CitricAcid+pH+ResidualSugar.buckets+LabelAppeal+AcidIndex+Stars_Acidindex+Alcohol_Suphates+Labelappeal_Starts,data=wine_train,family = "binomial")
+
+glm_model_2<-glm(TARGET_1~Stars_Acidindex+pH+CitricAcid+pH+STARS+AcidIndex+LabelAppeal,data=wine_train,family = "binomial")
+
+glm_model_3<-glm(TARGET_1~STARS,data=wine_train,family = "binomial")
+
+
+summary(glm_model)
+
+summary(glm_model_2)
+
+summary(glm_model_3)
+
+
+predict_wine<-predict(glm_model_2)
+
+```
+
+The variables that are statistically significant are Citric Acid, pH, LabelAppeal, AcidIndex, and stars. 
+
+
+Section 4 Select model
+
+We are going to use AIC as the criteria. My glm model 2 has the lowest AIC score of 12049. This moel is also relatively simple becuae it is using the variables that were considerable significant. And the Stars and Acid_index relationship seem to have a significant affect on the model's performance.
+
+
+Section 5 Formula
+
+```{r,echo=FALSE,comment=NA}
+model_equation <- function(model, ...) {
+  format_args <- list(...)
+  
+  model_coeff <- model$coefficients
+  format_args$x <- abs(model$coefficients)
+  model_coeff_sign <- sign(model_coeff)
+  model_coeff_prefix <- case_when(model_coeff_sign == -1 ~ " - ",
+                                  model_coeff_sign == 1 ~ " + ",
+                                  model_coeff_sign == 0 ~ " + ")
+  model_eqn <- paste(strsplit(as.character(model$call$formula), "~")[[2]], # 'y'
+                     "=",
+                     paste(if_else(model_coeff[1]<0, "- ", ""),
+                           do.call(format, format_args)[1],
+                           paste(model_coeff_prefix[-1],
+                                 do.call(format, format_args)[-1],
+                                 " * ",
+                                 names(model_coeff[-1]),
+                                 sep = "", collapse = ""),
+                           sep = ""))
+  return(model_eqn)
+}
+
+model_equation(glm_model_2)
+```
+
+
+```{r,echo=FALSE,comment=NA}
+
+wine_test$ResidualSugar[is.na(wine_test$ResidualSugar)]<-median(wine_test$ResidualSugar,na.rm=TRUE)
+wine_test$FreeSulfurDioxide[is.na(wine_test$FreeSulfurDioxide)]<-median(wine_test$FreeSulfurDioxide,na.rm=TRUE)
+wine_test$TotalSulfurDioxide[is.na(wine_test$TotalSulfurDioxide)]<-median(wine_test$TotalSulfurDioxide,na.rm=TRUE)
+wine_test$pH[is.na(wine_test$pH)]<-median(wine_test$pH,na.rm=TRUE)
+wine_test$Sulphates[is.na(wine_test$Sulphates)]<-median(wine_test$Sulphates,na.rm=TRUE)
+wine_test$Alcohol[is.na(wine_test$Alcohol)]<-median(wine_test$Alcohol,na.rm=TRUE)
+wine_test$STARS[is.na(wine_test$STARS)]<-median(wine_test$STARS,na.rm=TRUE)
+wine_test$Chlorides[is.na(wine_test$Chlorides)]<-median(wine_test$Chlorides,na.rm=TRUE)
+
+wine_test <- wine_test %>% mutate(acid_ratio = ifelse(wine_test$VolatileAcidity==0,0,wine_test$FixedAcidity/wine_test$VolatileAcidity))
+
+wine_test <- wine_test %>% mutate(sulfur_ratio = ifelse(is.na(wine_test$TotalSulfurDioxide),0,ifelse(is.na(wine_test$FreeSulfurDioxide),0,wine_test$TotalSulfurDioxide/wine_test$FreeSulfurDioxide)))
+
+wine_test$sulfur_ratio[is.infinite(wine_test$sulfur_ratio)]<-0
+
+
+b<- c(-Inf,-100,-50,0,50,100,Inf)
+names<-c("1","2","3","4","5","6")
+wine_test$ResidualSugar.buckets<-cut(wine_test$ResidualSugar,breaks = b,labels = names)    
+
+wine_test<-wine_test %>% mutate(Stars_Acidindex= wine_test$STARS*wine_test$AcidIndex)
+
+wine_test<-wine_test %>% mutate(Alcohol_Suphates= wine_test$Alcohol+wine_test$Sulphates)
+
+wine_test<-wine_test %>% mutate(Labelappeal_Starts= wine_test$LabelAppeal+wine_test$STARS)
+
+
+P_TARGET<-predict(glm_model_2,newdata = wine_test)
+
+Index<-wine_test$ï..INDEX
+
+export_csv<-data.frame(Index,P_TARGET)
+
+write.csv(export_csv,file = "C:\\Users\\bcoll\\Documents\\MSDS 410\\wine.csv")
+
+```
+
+

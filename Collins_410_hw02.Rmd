@@ -1,0 +1,277 @@
+---
+title: "MA#2"
+author: "Bryan Collins"
+date: "7/11/2021"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+Section 1 Modeling and More
+
+```{r setup, include=FALSE}
+options(scipen = 999)
+knitr::opts_chunk$set(echo = TRUE)
+library(moments)  # install.packages("moments")
+library(ggplot2)
+library(tidyverse)
+library(gridExtra)
+library(readxl)
+library(scales)
+library(caret)
+library(car)
+
+setwd("~/MSDS 410")
+
+moneyball_train <- read_csv("moneyball_train-1.csv")
+moneyball_test <- read_csv("moneyball_test-1.csv")
+
+```
+
+```{r,echo=FALSE,comment=NA}
+
+moneyball_train<- moneyball_train %>% mutate(Split_wins = ifelse(TARGET_WINS %in% 0:49,1,
+                                      ifelse(TARGET_WINS %in% 50:100,2,3)))                                   
+moneyball_train <- moneyball_train %>% mutate(on_base=moneyball_train$TEAM_BATTING_H+moneyball_train$TEAM_BATTING_BB)
+
+model_onbase<-lm(moneyball_train$TARGET_WINS~moneyball_train$on_base,data=moneyball_train)
+
+ggplot(data=NULL,aes(model_onbase$residuals, group=moneyball_train$Split_wins))+geom_boxplot()
+
+
+```
+
+average actual mean
+```{r,echo=FALSE,comment=NA}
+aggregate(moneyball_train$TARGET_WINS, list(moneyball_train$Split_wins), FUN=mean) 
+
+```
+
+
+average estimate mean
+```{r,echo=FALSE,comment=NA}
+aggregate(model_onbase$fitted.values, list(moneyball_train$Split_wins), FUN=mean) 
+```
+
+It seems pretty clear that group 2 has the best fit for the model. Group 3 is consistently underpredicted, and group 1 is consistently overpredicted.
+
+I will add the following dummy variables:
+
+G1 0-50 wins
+G2 50-75 wins
+G3 75-85 wins
+G4 85-100 wins
+G5 100-120 wins
+G6 120-162 wins
+
+
+```{r,echo=FALSE,comment=NA}
+
+moneyball_train<- moneyball_train %>%
+  
+mutate(G1=ifelse(moneyball_train$TARGET_WINS %in% 0:50,1,0)) %>%
+mutate(G2=ifelse(moneyball_train$TARGET_WINS %in% 50:75,1,0))%>%
+mutate(G3=ifelse(moneyball_train$TARGET_WINS %in% 75:85,1,0))%>%
+mutate(G4=ifelse(moneyball_train$TARGET_WINS %in% 85:100,1,0))%>%
+mutate(G5=ifelse(moneyball_train$TARGET_WINS %in% 100:120,1,0))%>%
+mutate(G6=ifelse(moneyball_train$TARGET_WINS %in% 120:162,1,0))
+```
+
+
+
+add trunc_team_batting
+```{r,comment=NA}
+moneyball_train<- moneyball_train %>% mutate(trunc_team_batting=ifelse(TEAM_BATTING_H<1122,1122,ifelse(TEAM_BATTING_H>2333,2333,TEAM_BATTING_H)))
+
+```
+
+addd trunc_2b, trunc_3b, and trunc_hr
+
+
+Add team total bases
+
+```{r,comment=NA}
+moneyball_train<- moneyball_train %>% mutate(trunc_team_batting_2b=ifelse(TEAM_BATTING_2B<123,123,ifelse(TEAM_BATTING_2B>382,282,TEAM_BATTING_2B))) %>%
+mutate(trunc_team_batting_3b=ifelse(TEAM_BATTING_3B<11,11,ifelse(TEAM_BATTING_3B>166,166,TEAM_BATTING_3B))) %>%
+mutate(trunc_team_batting_hr=ifelse(TEAM_BATTING_HR<30,30,ifelse(TEAM_BATTING_HR>240,240,TEAM_BATTING_HR))) %>%
+mutate(team_batting_1b=trunc_team_batting-trunc_team_batting_hr-trunc_team_batting_2b-trunc_team_batting_3b)%>%
+mutate(total_bases=4*trunc_team_batting_hr+3*trunc_team_batting_3b+2*trunc_team_batting_2b+1*team_batting_1b)
+
+```
+
+Section 2
+
+```{r,echo=FALSE,comment=NA}
+
+moneyball_train$total_bases[is.na(moneyball_train$total_bases)]<-median(moneyball_train$total_bases,na.rm=TRUE)
+
+moneyball_train$on_base[is.na(moneyball_train$on_base)]<-median(moneyball_train$on_base,na.rm=TRUE)
+
+moneyball_train$trunc_team_batting_hr[is.na(moneyball_train$trunc_team_batting_hr)]<-median(moneyball_train$trunc_team_batting_hr,na.rm=TRUE)
+
+moneyball_train$TEAM_BATTING_SO[is.na(moneyball_train$TEAM_BATTING_SO)]<-median(moneyball_train$TEAM_BATTING_SO,na.rm=TRUE)
+
+moneyball_train$team_batting_1b[is.na(moneyball_train$team_batting_1b)]<-median(moneyball_train$team_batting_1b,na.rm=TRUE)
+
+
+moneyball_train$TEAM_PITCHING_H[is.na(moneyball_train$TEAM_PITCHING_H)]<-median(moneyball_train$TEAM_PITCHING_H,na.rm=TRUE)
+
+moneyball_train$TEAM_BASERUN_SB[is.na(moneyball_train$TEAM_BASERUN_SB)]<-median(moneyball_train$TEAM_BASERUN_SB,na.rm=TRUE)
+
+moneyball_train<- moneyball_train %>% mutate(log_targetwins= log(moneyball_train$TARGET_WINS))
+
+moneyball_train$log_targetwins[which(!is.finite(moneyball_train$log_targetwins))] <- median(moneyball_train$log_targetwins)
+
+model<-lm(moneyball_train$TARGET_WINS~moneyball_train$total_bases+moneyball_train$on_base+moneyball_train$trunc_team_batting_hr+moneyball_train$TEAM_BATTING_SO+moneyball_train$team_batting_1b+moneyball_train$TEAM_PITCHING_H+moneyball_train$TEAM_BASERUN_SB,data=moneyball_train)
+
+model_log<-lm(moneyball_train$log_targetwins~moneyball_train$total_bases+moneyball_train$on_base+moneyball_train$trunc_team_batting_hr+moneyball_train$TEAM_BATTING_SO+moneyball_train$team_batting_1b+moneyball_train$TEAM_PITCHING_H+moneyball_train$TEAM_BASERUN_SB,data=moneyball_train)
+
+summary(model)
+
+summary(model_log)
+
+confint(model)
+confint(model_log)
+
+```
+
+Log transformations have the benefit of making the variable to predict more “normal.” The goal is to have the smallest error possible in prediction. We would interpret the non-log like a standard regression. If the X variable changes by one, then the y variable should change by the X variable. Interpretation of the log regression model would be if we change x by one unit, then our y would change by 100 * coefficient percent. Looking at the performance of both models, the regular model has a slightly higher adjusted R2. The log transformation did not improve the model performance in this instance. Since wins are already bound by 0-162, and we have a large dataset, wins already follow very closely to the normal distribution. The log transformation complicates matters when it is not necessary. Looking at the trunc_team_batting histogram, it is skewed, so let's make that into a log transformation and refit a model using that.
+
+
+```{r,echo=FALSE,comment=NA}
+histogram(moneyball_train$trunc_team_batting)
+
+moneyball_train<- moneyball_train %>% mutate(log_trunc_team_batting=log(trunc_team_batting))
+
+model<-lm(moneyball_train$TARGET_WINS~moneyball_train$total_bases+moneyball_train$log_trunc_team_batting+moneyball_train$on_base+moneyball_train$trunc_team_batting_hr+moneyball_train$TEAM_BATTING_SO+moneyball_train$team_batting_1b+moneyball_train$TEAM_PITCHING_H+moneyball_train$TEAM_BASERUN_SB,data=moneyball_train)
+
+```
+
+With our updated model, let's look at some diagnostic plots to see how well the fit is looking.
+
+```{r,echo=FALSE,comment=NA}
+
+ggplot(data=NULL,aes(model$residuals, group=moneyball_train$Split_wins))+geom_boxplot()
+
+qqPlot(model,main="QQplot of Residuals")
+
+ggplot(data=NULL,aes(moneyball_train$TARGET_WINS,model$fitted.values))+geom_point()
+
+```
+
+We can see that we are still over and underestimating the lower and upper ends of the spectrum.
+
+
+
+Compute the vif for the models.
+
+
+```{r,comment=NA}
+
+vif(model)
+vif(model_log)
+
+```
+
+We have very high Vifs for total bases and the log team batting trasnformation so let's remove log trasnformation from the model and see if it performs better.
+
+
+Section 3
+
+I will make four different models; I will split the models between primarily pitching and running. fiedling, hitting stats. Then combining pitching and hitting stats to see which model performs the best. This will ensure I will use the model with the highest adjusted R2.
+
+```{r,echo=FALSE,comment=NA}
+
+model_running<-lm(moneyball_train$TARGET_WINS~moneyball_train$TEAM_BASERUN_SB+moneyball_train$TEAM_FIELDING_E,data = moneyball_train)
+
+model_batting<-lm(moneyball_train$TARGET_WINS~moneyball_train$total_bases+moneyball_train$on_base+moneyball_train$trunc_team_batting_hr+moneyball_train$trunc_team_batting_2b+moneyball_train$trunc_team_batting_3b,data=moneyball_train)
+
+model_pitching <-lm(moneyball_train$TARGET_WINS~moneyball_train$TEAM_PITCHING_H+moneyball_train$TEAM_PITCHING_BB+moneyball_train$TEAM_PITCHING_H,data=moneyball_train)
+
+model_combine<-lm(TARGET_WINS~total_bases+on_base+trunc_team_batting_hr+TEAM_BATTING_SO+team_batting_1b+TEAM_PITCHING_H+TEAM_BASERUN_SB,data=moneyball_train)
+
+summary(model_running)
+summary(model_batting)
+summary(model_pitching)
+summary(model_combine)
+
+model_equation <- function(model, ...) {
+  format_args <- list(...)
+  
+  model_coeff <- model$coefficients
+  format_args$x <- abs(model$coefficients)
+  model_coeff_sign <- sign(model_coeff)
+  model_coeff_prefix <- case_when(model_coeff_sign == -1 ~ " - ",
+                                  model_coeff_sign == 1 ~ " + ",
+                                  model_coeff_sign == 0 ~ " + ")
+  model_eqn <- paste(strsplit(as.character(model$call$formula), "~")[[2]], # 'y'
+                     "=",
+                     paste(if_else(model_coeff[1]<0, "- ", ""),
+                           do.call(format, format_args)[1],
+                           paste(model_coeff_prefix[-1],
+                                 do.call(format, format_args)[-1],
+                                 " * ",
+                                 names(model_coeff[-1]),
+                                 sep = "", collapse = ""),
+                           sep = ""))
+  return(model_eqn)
+}
+
+```
+
+It looks like the combined model gives me the highest adjusted R2, so that will be the model we use to predict and submit to Kaggle
+
+Section 4
+
+Please see the formula below.
+
+```{r,comment=NA}
+model_equation(model_combine)
+
+
+```
+
+```{r,echo=FALSE,comment=NA}
+                                   
+moneyball_test <- moneyball_test %>% mutate(on_base=moneyball_test$TEAM_BATTING_H+moneyball_test$TEAM_BATTING_BB)
+
+moneyball_test<- moneyball_test %>% mutate(trunc_team_batting=ifelse(TEAM_BATTING_H<1122,1122,ifelse(TEAM_BATTING_H>2333,2333,TEAM_BATTING_H)))
+
+moneyball_test<- moneyball_test %>% mutate(trunc_team_batting_2b=ifelse(TEAM_BATTING_2B<123,123,ifelse(TEAM_BATTING_2B>382,282,TEAM_BATTING_2B))) %>%
+mutate(trunc_team_batting_3b=ifelse(TEAM_BATTING_3B<11,11,ifelse(TEAM_BATTING_3B>166,166,TEAM_BATTING_3B))) %>%
+mutate(trunc_team_batting_hr=ifelse(TEAM_BATTING_HR<30,30,ifelse(TEAM_BATTING_HR>240,240,TEAM_BATTING_HR))) %>%
+mutate(team_batting_1b=trunc_team_batting-trunc_team_batting_hr-trunc_team_batting_2b-trunc_team_batting_3b)%>%
+mutate(total_bases=4*trunc_team_batting_hr+3*trunc_team_batting_3b+2*trunc_team_batting_2b+1*team_batting_1b)
+
+moneyball_test<- moneyball_test %>% mutate(log_trunc_team_batting=log(trunc_team_batting))
+ 
+
+moneyball_test$total_bases[is.na(moneyball_test$total_bases)]<-median(moneyball_test$total_bases,na.rm=TRUE)
+
+moneyball_test$on_base[is.na(moneyball_test$on_base)]<-median(moneyball_test$on_base,na.rm=TRUE)
+
+moneyball_test$trunc_team_batting_hr[is.na(moneyball_test$trunc_team_batting_hr)]<-median(moneyball_test$trunc_team_batting_hr,na.rm=TRUE)
+
+moneyball_test$TEAM_BATTING_SO[is.na(moneyball_test$TEAM_BATTING_SO)]<-median(moneyball_test$TEAM_BATTING_SO,na.rm=TRUE)
+
+moneyball_test$team_batting_1b[is.na(moneyball_test$team_batting_1b)]<-median(moneyball_test$team_batting_1b,na.rm=TRUE)
+
+
+moneyball_test$TEAM_PITCHING_H[is.na(moneyball_test$TEAM_PITCHING_H)]<-median(moneyball_test$TEAM_PITCHING_H,na.rm=TRUE)
+
+moneyball_test$TEAM_BASERUN_SB[is.na(moneyball_test$TEAM_BASERUN_SB)]<-median(moneyball_test$TEAM_BASERUN_SB,na.rm=TRUE)
+
+
+ P_Target_Wins<-.6354+.0169*moneyball_test$total_bases+.01627*moneyball_test$on_base+.00418*moneyball_test$trunc_team_batting_hr-.0007*moneyball_test$TEAM_BATTING_SO+.0114*moneyball_test$team_batting_1b-.0018*moneyball_test$TEAM_PITCHING_H+.02556*moneyball_test$TEAM_BASERUN_SB
+   
+INDEX<-moneyball_test$INDEX
+
+export_csv<-data.frame(INDEX,P_Target_Wins)
+
+```
+Using Kaggle the RSME was 12.64065 which is an improvement over my 13.26844 from model #1 assignment
+
+Section 5
+
+Submitted as csv file
+

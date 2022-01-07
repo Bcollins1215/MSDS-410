@@ -1,0 +1,381 @@
+---
+title: "MSDS 410 EDA"
+author: "Bryan Collins"
+date: "6/21/2021"
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(moments)  # install.packages("moments")
+library(ggplot2)
+library(tidyverse)
+library(gridExtra)
+library(readxl)
+library(scales)
+
+setwd("~/MSDS 410")
+
+moneyball_train <- read_csv("moneyball_train.csv")
+moneyball_test <- read_csv("moneyball_test.csv")
+
+
+```
+
+
+
+#1 EDA
+
+The most important aspect of a baseball season is the ultimate number of wins a team has. Teams should use stats to optimize for the most significant possible number of victories. In this exercise, I will comb through the different stats to see what is the most significant possible predictor of wins. Since we are concerned mostly about wins let's take a look wins to see what we are dealng with.
+
+
+```{r,echo=FALSE,comment=NA}
+
+INDEX<- moneyball_test$INDEX
+
+ggplot(moneyball_train,aes(x=TARGET_WINS))+geom_histogram(color="blue",fill="white",binwidth = 10)
+
+wins<-matrix(ncol=5, nrow = 1)
+colnames(wins)<-c("Mean","Median","Standard Deviation", "Max","Min")
+
+wins[1,1]=round(mean(moneyball_train$TARGET_WINS),0)
+wins[1,2]=median(moneyball_train$TARGET_WINS)
+wins[1,3]=round(sd(moneyball_train$TARGET_WINS),2)
+wins[1,4]=max(moneyball_train$TARGET_WINS)
+wins[1,5]=min(moneyball_train$TARGET_WINS)
+
+wins
+```
+
+Kurtosis
+```{r,echo=FALSE,comment=NA}
+#KURTOsis
+kurtosis(moneyball_train$TARGET_WINS)
+```
+
+Skewness
+```{r,echo=FALSE,comment=NA}
+#SKEWNESS
+skewness(moneyball_train$TARGET_WINS)
+```
+
+
+Distribution of wins is relativelty normal. Mean is 81 wins which is a 50% winning percentage out of a 162 game scheule. The kurtosis of the distribution is aroud 4 suggesting the distribution is extremely peaked. The skewness is -.4 suggesting a slight  left skew which makes sense considering our mean is slightly lower than the median.
+
+There are outlier in the wins section. The max number of wins is 146, which is not true becuase The record for number of wins is 116 by the 2001 Seattle Mariners. And the minimum is 0 which mostly certaintly also has never happened. So these outliers we will take care of in the next section.
+
+Now let's take a look to see how many NAs are in our dataset. We will tackle the NAs in our next section.
+```{r,echo=FALSE,comment=NA}
+
+map(moneyball_train, ~sum(is.na(.)))
+
+```
+
+Let's look at some hitting statistics
+
+```{r,echo=FALSE,comment=NA}
+hits<-ggplot(moneyball_train,aes(moneyball_train$TEAM_BATTING_H))+geom_boxplot(color="red",notch = TRUE)+labs(x="hits")
+hrs<-ggplot(moneyball_train,aes(moneyball_train$TEAM_BATTING_HR))+geom_boxplot(color="red",notch = TRUE)+labs(x="HRs")
+doubles<-ggplot(moneyball_train,aes(moneyball_train$TEAM_BATTING_2B))+geom_boxplot(color="red",notch = TRUE)+labs(x="doubles")
+triples<-ggplot(moneyball_train,aes(moneyball_train$TEAM_BATTING_3B))+geom_boxplot(color="red",notch = TRUE)+labs(x="triples")
+BBs<-ggplot(moneyball_train,aes(moneyball_train$TEAM_BATTING_BB))+geom_boxplot(color="red",notch = TRUE)+labs(x="BBs")
+SOs<-ggplot(moneyball_train,aes(moneyball_train$TEAM_BATTING_SO))+geom_boxplot(color="red",notch = TRUE)+labs(x="SOs")
+
+grid.arrange(hits,hrs,doubles,triples, BBs,SOs,nrow=2)
+```
+
+Let's see how the hitting statistics correlated to wins
+
+```{r,echo=FALSE,comment=NA}
+correlation_wins<-matrix(nrow=,ncol=6)
+colnames(correlation_wins)<-c("hits","HRs","doubles","triples","BBs","SOs")
+
+correlation_wins[1,1]<-round(cor(moneyball_train$TARGET_WINS,moneyball_train$TEAM_BATTING_H),2)
+correlation_wins[1,2]<-round(cor(moneyball_train$TARGET_WINS,moneyball_train$TEAM_BATTING_HR),2)
+correlation_wins[1,3]<-round(cor(moneyball_train$TARGET_WINS,moneyball_train$TEAM_BATTING_2B),2)
+correlation_wins[1,4]<-round(cor(moneyball_train$TARGET_WINS,moneyball_train$TEAM_BATTING_3B),2)
+correlation_wins[1,5]<-round(cor(moneyball_train$TARGET_WINS,moneyball_train$TEAM_BATTING_BB),2)
+correlation_wins[1,6]<-round(cor(moneyball_train$TARGET_WINS,moneyball_train$TEAM_BATTING_SO),2)
+
+correlation_wins
+```
+
+Looks like we are missing Strikeout data as indicated in the previous section. Like I mentioned eariler we will address those issues in the next section. The total number of hits, is most correlated with wins followed by base on balls or walks. Somewhat surprisngly homeruns is not a closely correlated as doubles is to wins. Not surprisngly the least common batting outcome the triple is least correlated to wins. We are missing alot of hitch by pitch data and is a very infrequent occurence making it rather useless for our analysis. 
+
+Let's take a quick look at stolen bases and caught stealing.
+
+```{r,echo=FALSE,comment=NA}
+
+ggplot(moneyball_train,aes(x=moneyball_train$TEAM_BASERUN_SB,y=moneyball_train$TARGET_WINS))+geom_point()+labs(x="SB",y="Wins")
+
+ggplot(moneyball_train,aes(x=moneyball_train$TEAM_BASERUN_CS,y=moneyball_train$TARGET_WINS))+geom_point()+labs(x="CS",y="Wins")
+
+
+```
+
+There is no obvious correlation between stolen bases andd wins or negative correlation betwee caught stealing andd wins.
+
+Next up on the list let's take a look at pitching stats.
+
+```{r,echo=FALSE,comment=NA}
+hits<-ggplot(moneyball_train,aes(moneyball_train$TEAM_PITCHING_H))+geom_boxplot(color="red",notch = TRUE)+labs(x="hits")
+hrs<-ggplot(moneyball_train,aes(moneyball_train$TEAM_PITCHING_HR))+geom_boxplot(color="red",notch = TRUE)+labs(x="HRs")
+BBs<-ggplot(moneyball_train,aes(moneyball_train$TEAM_PITCHING_BB))+geom_boxplot(color="red",notch = TRUE)+labs(x="BBs")
+SOs<-ggplot(moneyball_train,aes(moneyball_train$TEAM_PITCHING_SO))+geom_boxplot(color="red",notch = TRUE)+labs(x="SOs")
+
+grid.arrange(hits,hrs,BBs,SOs,nrow=2)
+```
+
+Let's see how the pitching statistics correlated to wins
+
+```{r,echo=FALSE,comment=NA}
+correlation_wins<-matrix(nrow=1,ncol=4)
+colnames(correlation_wins)<-c("hits","HRs","BBs","SOs")
+
+correlation_wins[1,1]<-round(cor(moneyball_train$TARGET_WINS,moneyball_train$TEAM_PITCHING_H),2)
+correlation_wins[1,2]<-round(cor(moneyball_train$TARGET_WINS,moneyball_train$TEAM_PITCHING_HR),2)
+correlation_wins[1,3]<-round(cor(moneyball_train$TARGET_WINS,moneyball_train$TEAM_PITCHING_BB),2)
+correlation_wins[1,4]<-round(cor(moneyball_train$TARGET_WINS,moneyball_train$TEAM_PITCHING_SO),2)
+
+correlation_wins
+
+```
+
+Looks like there is a number of outliers in the pitching stats. Hits, BBs, and SOs all need to be addressed in the next section. 
+
+#2 Data Preparation
+
+There are a few areas where we need to address outliers. Let's start with the wins section. The record for number of wins ina season is 116 and loses is 120. So first we need to add a losses column, and then anything over the record for loses and wins will be re assesed to the median.
+
+```{r,echo=FALSE,comment=NA}
+
+moneyball_train <- moneyball_train %>% mutate(loss=162-moneyball_train$TARGET_WINS)
+moneyball_train$TARGET_WINS[moneyball_train$TARGET_WINS>=116]<-median(moneyball_train$TARGET_WINS)
+moneyball_train$TARGET_WINS[moneyball_train$loss>=120]<-median(moneyball_train$loss)
+
+
+ggplot(moneyball_train,aes(TARGET_WINS))+geom_boxplot(color="red")
+
+```
+
+Now for the rest of the stats, let's replace all blanks with the median for the stat column.
+
+```{r,echo=FALSE,comment=NA}
+moneyball_train$TEAM_BATTING_HBP[is.na(moneyball_train$TEAM_BATTING_HBP)]<-median(moneyball_train$TEAM_BATTING_HBP,na.rm=TRUE)
+
+moneyball_train$TEAM_BATTING_SO[is.na(moneyball_train$TEAM_BATTING_SO)]<-median(moneyball_train$TEAM_BATTING_SO,na.rm=TRUE)
+
+moneyball_train$TEAM_BASERUN_SB[is.na(moneyball_train$TEAM_BASERUN_SB)]<-median(moneyball_train$TEAM_BASERUN_SB,na.rm=TRUE)
+
+moneyball_train$TEAM_BASERUN_CS[is.na(moneyball_train$TEAM_BASERUN_CS)]<-median(moneyball_train$TEAM_BASERUN_CS,na.rm=TRUE)
+
+moneyball_train$TEAM_PITCHING_SO[is.na(moneyball_train$TEAM_PITCHING_SO)]<-median(moneyball_train$TEAM_PITCHING_SO,na.rm=TRUE)
+
+moneyball_train$TEAM_FIELDING_DP[is.na(moneyball_train$TEAM_FIELDING_DP)]<-median(moneyball_train$TEAM_FIELDING_DP,na.rm = TRUE)
+
+
+map(moneyball_train, ~sum(is.na(.)))
+
+
+```
+
+
+Now for the rest of the data points let's take all data points above and below the 95th and 5th percentile and revalue those data points back to those respective values.
+
+```{r,echo=FALSE,comment=NA}
+fun <- function(x){
+     quantiles <- quantile( x, c(.05, .95 ),na.rm = TRUE )
+     x[ x < quantiles[1] ] <- quantiles[1]
+     x[ x > quantiles[2] ] <- quantiles[2]
+     x
+}
+
+moneyball_train<-fun(moneyball_train)
+
+hits<-ggplot(moneyball_train,aes(moneyball_train$TEAM_PITCHING_H))+geom_boxplot(color="red",notch = TRUE)+labs(x="hits")
+hrs<-ggplot(moneyball_train,aes(moneyball_train$TEAM_PITCHING_HR))+geom_boxplot(color="red",notch = TRUE)+labs(x="HRs")
+BBs<-ggplot(moneyball_train,aes(moneyball_train$TEAM_PITCHING_BB))+geom_boxplot(color="red",notch = TRUE)+labs(x="BBs")
+SOs<-ggplot(moneyball_train,aes(moneyball_train$TEAM_PITCHING_SO))+geom_boxplot(color="red",notch = TRUE)+labs(x="SOs")
+
+grid.arrange(hits,hrs,BBs,SOs,nrow=2)
+
+
+hits<-ggplot(moneyball_train,aes(moneyball_train$TEAM_BATTING_H))+geom_boxplot(color="red",notch = TRUE)+labs(x="hits")
+hrs<-ggplot(moneyball_train,aes(moneyball_train$TEAM_BATTING_HR))+geom_boxplot(color="red",notch = TRUE)+labs(x="HRs")
+doubles<-ggplot(moneyball_train,aes(moneyball_train$TEAM_BATTING_2B))+geom_boxplot(color="red",notch = TRUE)+labs(x="doubles")
+triples<-ggplot(moneyball_train,aes(moneyball_train$TEAM_BATTING_3B))+geom_boxplot(color="red",notch = TRUE)+labs(x="triples")
+BBs<-ggplot(moneyball_train,aes(moneyball_train$TEAM_BATTING_BB))+geom_boxplot(color="red",notch = TRUE)+labs(x="BBs")
+SOs<-ggplot(moneyball_train,aes(moneyball_train$TEAM_BATTING_SO))+geom_boxplot(color="red",notch = TRUE)+labs(x="SOs")
+
+grid.arrange(hits,hrs,doubles,triples, BBs,SOs,nrow=2)
+```
+
+As we can see our boxplots are not as spread out and our NAs and outliers are cleaned.
+
+In this dataset there is no number of at bats for calucating a batting average, on base percetange, or slugging percentage is not going to be possilbe. However we can caluclate the percetnage of the hits that are extra base hits. Let's add a colunn for percentage of hits that are extra base hits. Let's also do a quasi on-base stat and add together the hits and walks columns to get the gross on base for a year. I am not inclduing hit by pitches because that does not take any particular skill. Or at least not a skill a team would explicitly select for. Wheras getting hits and taking walks is a particular skill worth selecting for. ON the pitching side lets also create the on base given up column.
+
+```{r,echo=FALSE,comment=NA}
+moneyball_train <- moneyball_train %>% mutate(percent_hits_extrabase=(moneyball_train$TEAM_BATTING_2B+moneyball_train$TEAM_BATTING_3B+moneyball_train$TEAM_BATTING_HR)/moneyball_train$TEAM_BATTING_H)
+
+moneyball_train <- moneyball_train %>% mutate(on_base=moneyball_train$TEAM_BATTING_H+moneyball_train$TEAM_BATTING_BB)
+
+moneyball_train <- moneyball_train %>% mutate(on_base_x=moneyball_train$TEAM_PITCHING_H+moneyball_train$TEAM_PITCHING_BB)
+
+
+ggplot(moneyball_train,aes(moneyball_train$percent_hits_extrabase))+geom_boxplot()
+ggplot(moneyball_train,aes(moneyball_train$on_base))+geom_boxplot()
+ggplot(moneyball_train,aes(moneyball_train$on_base_x))+geom_boxplot()
+
+
+```
+
+#3 Build Model
+
+To build my linear regression model I will train it against three different variables. Let's first take a look at the scatterplot for each of the three variables as it pertains to wins.
+
+```{r,echo=FALSE,comment=NA}
+
+ggplot(moneyball_train,aes(moneyball_train$percent_hits_extrabase,moneyball_train$TARGET_WINS))+geom_point(color="blue")+stat_smooth(method = lm)+labs(x="Percent extra base hits",y="wins")
+
+cor(moneyball_train$TARGET_WINS,moneyball_train$percent_hits_extrabase)
+
+ggplot(moneyball_train,aes(moneyball_train$on_base,moneyball_train$TARGET_WINS))+geom_point(color="green")+stat_smooth(method=lm)+labs(x="on base",y="wins")
+
+cor(moneyball_train$TARGET_WINS,moneyball_train$on_base)
+
+ggplot(moneyball_train,aes(moneyball_train$on_base_x,moneyball_train$TARGET_WINS))+geom_point(color="green")+stat_smooth(method = lm)+labs(x="on base against",y="wins")
+
+cor(moneyball_train$TARGET_WINS,moneyball_train$on_base_x)
+
+
+```
+
+
+
+From the initial glance at the scatterplots and the correlations we might expect on_base to be the best predictor. Let's run the regression models for all three and see what we get.
+
+```{r,echo=FALSE,comment=NA}
+model_onbase<-lm(moneyball_train$TARGET_WINS~moneyball_train$on_base,data=moneyball_train)
+model_extrahit<-lm(moneyball_train$TARGET_WINS~moneyball_train$percent_hits_extrabase,data=moneyball_train)
+model_onbase_against<-lm(moneyball_train$TARGET_WINS~moneyball_train$on_base_x,data=moneyball_train)
+
+model_onbase_against
+model_onbase
+model_extrahit
+
+summary(model_onbase_against)
+summary(model_onbase)
+summary(model_extrahit)
+
+
+confint(model_onbase_against)
+confint(model_onbase)
+confint(model_extrahit)
+
+moneyball_test$TEAM_BATTING_HBP[is.na(moneyball_test$TEAM_BATTING_HBP)]<-median(moneyball_test$TEAM_BATTING_HBP,na.rm=TRUE)
+
+moneyball_test$TEAM_BATTING_SO[is.na(moneyball_test$TEAM_BATTING_SO)]<-median(moneyball_test$TEAM_BATTING_SO,na.rm=TRUE)
+
+moneyball_test$TEAM_BASERUN_SB[is.na(moneyball_test$TEAM_BASERUN_SB)]<-median(moneyball_test$TEAM_BASERUN_SB,na.rm=TRUE)
+
+moneyball_test$TEAM_BASERUN_CS[is.na(moneyball_test$TEAM_BASERUN_CS)]<-median(moneyball_test$TEAM_BASERUN_CS,na.rm=TRUE)
+
+moneyball_test$TEAM_PITCHING_SO[is.na(moneyball_test$TEAM_PITCHING_SO)]<-median(moneyball_test$TEAM_PITCHING_SO,na.rm=TRUE)
+
+moneyball_test$TEAM_FIELDING_DP[is.na(moneyball_test$TEAM_FIELDING_DP)]<-median(moneyball_test$TEAM_FIELDING_DP,na.rm = TRUE)
+
+fun <- function(x){
+     quantiles <- quantile( x, c(.05, .95 ),na.rm = TRUE )
+     x[ x < quantiles[1] ] <- quantiles[1]
+     x[ x > quantiles[2] ] <- quantiles[2]
+     x
+}
+
+moneyball_test<-fun(moneyball_test)
+
+hits<-ggplot(moneyball_test,aes(moneyball_test$TEAM_PITCHING_H))+geom_boxplot(color="red",notch = TRUE)+labs(x="hits")
+hrs<-ggplot(moneyball_test,aes(moneyball_test$TEAM_PITCHING_HR))+geom_boxplot(color="red",notch = TRUE)+labs(x="HRs")
+BBs<-ggplot(moneyball_test,aes(moneyball_test$TEAM_PITCHING_BB))+geom_boxplot(color="red",notch = TRUE)+labs(x="BBs")
+SOs<-ggplot(moneyball_test,aes(moneyball_test$TEAM_PITCHING_SO))+geom_boxplot(color="red",notch = TRUE)+labs(x="SOs")
+
+hits<-ggplot(moneyball_test,aes(moneyball_test$TEAM_BATTING_H))+geom_boxplot(color="red",notch = TRUE)+labs(x="hits")
+hrs<-ggplot(moneyball_test,aes(moneyball_test$TEAM_BATTING_HR))+geom_boxplot(color="red",notch = TRUE)+labs(x="HRs")
+doubles<-ggplot(moneyball_test,aes(moneyball_test$TEAM_BATTING_2B))+geom_boxplot(color="red",notch = TRUE)+labs(x="doubles")
+triples<-ggplot(moneyball_test,aes(moneyball_test$TEAM_BATTING_3B))+geom_boxplot(color="red",notch = TRUE)+labs(x="triples")
+BBs<-ggplot(moneyball_test,aes(moneyball_test$TEAM_BATTING_BB))+geom_boxplot(color="red",notch = TRUE)+labs(x="BBs")
+SOs<-ggplot(moneyball_test,aes(moneyball_test$TEAM_BATTING_SO))+geom_boxplot(color="red",notch = TRUE)+labs(x="SOs")
+
+moneyball_test <- moneyball_test %>% mutate(percent_hits_extrabase=(moneyball_test$TEAM_BATTING_2B+moneyball_test$TEAM_BATTING_3B+moneyball_test$TEAM_BATTING_HR)/moneyball_test$TEAM_BATTING_H)
+
+moneyball_test <- moneyball_test %>% mutate(on_base=moneyball_test$TEAM_BATTING_H+moneyball_test$TEAM_BATTING_BB)
+
+moneyball_test <- moneyball_test %>% mutate(on_base_x=moneyball_test$TEAM_PITCHING_H+moneyball_test$TEAM_PITCHING_BB)
+
+P_Target_Wins<-round(22.56341+.02986*moneyball_test$on_base,0)
+
+export_csv<-data.frame(INDEX,P_Target_Wins)
+
+
+
+```
+
+The coeffiecients for on_base regression model is the y_intercept value of 22.56341, which means that wins have a starting base level of that number. The slope coefficient is .029886 so for each addtional time on base that is worth .029886 wins.
+
+
+#4 WRITE OUT YOUR MODEL EQUATION
+
+Please see coe below for all data transformations made to my test data
+
+```{r}
+moneyball_test$TEAM_BATTING_HBP[is.na(moneyball_test$TEAM_BATTING_HBP)]<-median(moneyball_test$TEAM_BATTING_HBP,na.rm=TRUE)
+
+moneyball_test$TEAM_BATTING_SO[is.na(moneyball_test$TEAM_BATTING_SO)]<-median(moneyball_test$TEAM_BATTING_SO,na.rm=TRUE)
+
+moneyball_test$TEAM_BASERUN_SB[is.na(moneyball_test$TEAM_BASERUN_SB)]<-median(moneyball_test$TEAM_BASERUN_SB,na.rm=TRUE)
+
+moneyball_test$TEAM_BASERUN_CS[is.na(moneyball_test$TEAM_BASERUN_CS)]<-median(moneyball_test$TEAM_BASERUN_CS,na.rm=TRUE)
+
+moneyball_test$TEAM_PITCHING_SO[is.na(moneyball_test$TEAM_PITCHING_SO)]<-median(moneyball_test$TEAM_PITCHING_SO,na.rm=TRUE)
+
+moneyball_test$TEAM_FIELDING_DP[is.na(moneyball_test$TEAM_FIELDING_DP)]<-median(moneyball_test$TEAM_FIELDING_DP,na.rm = TRUE)
+
+fun <- function(x){
+     quantiles <- quantile( x, c(.05, .95 ),na.rm = TRUE )
+     x[ x < quantiles[1] ] <- quantiles[1]
+     x[ x > quantiles[2] ] <- quantiles[2]
+     x
+}
+
+moneyball_test<-fun(moneyball_test)
+
+hits<-ggplot(moneyball_test,aes(moneyball_test$TEAM_PITCHING_H))+geom_boxplot(color="red",notch = TRUE)+labs(x="hits")
+hrs<-ggplot(moneyball_test,aes(moneyball_test$TEAM_PITCHING_HR))+geom_boxplot(color="red",notch = TRUE)+labs(x="HRs")
+BBs<-ggplot(moneyball_test,aes(moneyball_test$TEAM_PITCHING_BB))+geom_boxplot(color="red",notch = TRUE)+labs(x="BBs")
+SOs<-ggplot(moneyball_test,aes(moneyball_test$TEAM_PITCHING_SO))+geom_boxplot(color="red",notch = TRUE)+labs(x="SOs")
+
+hits<-ggplot(moneyball_test,aes(moneyball_test$TEAM_BATTING_H))+geom_boxplot(color="red",notch = TRUE)+labs(x="hits")
+hrs<-ggplot(moneyball_test,aes(moneyball_test$TEAM_BATTING_HR))+geom_boxplot(color="red",notch = TRUE)+labs(x="HRs")
+doubles<-ggplot(moneyball_test,aes(moneyball_test$TEAM_BATTING_2B))+geom_boxplot(color="red",notch = TRUE)+labs(x="doubles")
+triples<-ggplot(moneyball_test,aes(moneyball_test$TEAM_BATTING_3B))+geom_boxplot(color="red",notch = TRUE)+labs(x="triples")
+BBs<-ggplot(moneyball_test,aes(moneyball_test$TEAM_BATTING_BB))+geom_boxplot(color="red",notch = TRUE)+labs(x="BBs")
+SOs<-ggplot(moneyball_test,aes(moneyball_test$TEAM_BATTING_SO))+geom_boxplot(color="red",notch = TRUE)+labs(x="SOs")
+
+moneyball_test <- moneyball_test %>% mutate(percent_hits_extrabase=(moneyball_test$TEAM_BATTING_2B+moneyball_test$TEAM_BATTING_3B+moneyball_test$TEAM_BATTING_HR)/moneyball_test$TEAM_BATTING_H)
+
+moneyball_test <- moneyball_test %>% mutate(on_base=moneyball_test$TEAM_BATTING_H+moneyball_test$TEAM_BATTING_BB)
+
+moneyball_test <- moneyball_test %>% mutate(on_base_x=moneyball_test$TEAM_PITCHING_H+moneyball_test$TEAM_PITCHING_BB)
+```
+
+Please see the linear regression formula I used to create the vector P_Target_Wins. This is the regression formula from the on_base statistic vs wins.
+
+```{r}
+
+P_Target_Wins<-round(22.56341+.02986*moneyball_test$on_base,0)
+
+```
+Using Kaggle the RSME was 13.26844.
+
